@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,65 +11,75 @@
   }
 }
 
-
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    /* NGE Color Palette */
+    --eva-orange: #ff6600;
+    --eva-amber: #ffaa00;
+    --eva-red: #ff0000;
+    --eva-green: #00ff00;
+    --eva-blue: #0066ff;
+    --eva-purple: #6600ff;
+    --eva-dark: #0a0a0a;
+    --eva-dark-purple: #1a0a1a;
+    --eva-terminal-green: #00ff41;
+    --eva-warning-red: #ff3333;
+    
+    /* Updated theme variables for NGE aesthetic */
+    --background: 10 10% 5%;
+    --foreground: 35 100% 70%;
+    --card: 10 10% 8%;
+    --card-foreground: 35 100% 70%;
+    --popover: 10 10% 5%;
+    --popover-foreground: 35 100% 70%;
+    --primary: 35 100% 50%;
+    --primary-foreground: 10 10% 5%;
+    --secondary: 10 20% 15%;
+    --secondary-foreground: 35 100% 70%;
+    --muted: 10 20% 12%;
+    --muted-foreground: 35 50% 40%;
+    --accent: 120 100% 25%;
+    --accent-foreground: 120 100% 70%;
+    --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --border: 35 50% 25%;
+    --input: 10 20% 15%;
+    --ring: 35 100% 50%;
+    --chart-1: 35 100% 50%;
+    --chart-2: 120 100% 50%;
+    --chart-3: 0 100% 50%;
+    --chart-4: 240 100% 50%;
+    --chart-5: 280 100% 50%;
+    --radius: 0rem;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 10 10% 5%;
+    --foreground: 35 100% 70%;
+    --card: 10 10% 8%;
+    --card-foreground: 35 100% 70%;
+    --popover: 10 10% 5%;
+    --popover-foreground: 35 100% 70%;
+    --primary: 35 100% 50%;
+    --primary-foreground: 10 10% 5%;
+    --secondary: 10 20% 15%;
+    --secondary-foreground: 35 100% 70%;
+    --muted: 10 20% 12%;
+    --muted-foreground: 35 50% 40%;
+    --accent: 120 100% 25%;
+    --accent-foreground: 120 100% 70%;
+    --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --border: 35 50% 25%;
+    --input: 10 20% 15%;
+    --ring: 35 100% 50%;
+    --chart-1: 35 100% 50%;
+    --chart-2: 120 100% 50%;
+    --chart-3: 0 100% 50%;
+    --chart-4: 240 100% 50%;
+    --chart-5: 280 100% 50%;
   }
 }
-
-
 
 @layer base {
   * {
@@ -74,5 +87,324 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    overflow-x: hidden;
   }
+}
+
+/* NGE Terminal Aesthetics */
+@layer components {
+  .eva-terminal {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a0a0a 100%);
+    border: 2px solid var(--eva-orange);
+    box-shadow: 
+      0 0 20px rgba(255, 102, 0, 0.3),
+      inset 0 0 20px rgba(255, 102, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .eva-terminal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 102, 0, 0.03) 50%,
+      transparent 100%
+    );
+    animation: terminal-scan 2s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes terminal-scan {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .eva-text {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--eva-orange);
+    text-shadow: 0 0 10px rgba(255, 102, 0, 0.5);
+  }
+
+  .eva-text-green {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--eva-terminal-green);
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+  }
+
+  .eva-text-red {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--eva-warning-red);
+    text-shadow: 0 0 10px rgba(255, 51, 51, 0.5);
+  }
+
+  .eva-title {
+    font-family: 'Orbitron', 'JetBrains Mono', monospace;
+    font-weight: 900;
+    color: var(--eva-orange);
+    text-shadow: 0 0 20px rgba(255, 102, 0, 0.7);
+    transform: scaleX(0.8); /* Mechanical compression like NGE */
+    letter-spacing: 2px;
+  }
+
+  .eva-border {
+    border: 1px solid var(--eva-orange);
+    box-shadow: 
+      0 0 10px rgba(255, 102, 0, 0.2),
+      inset 0 0 10px rgba(255, 102, 0, 0.1);
+  }
+
+  .eva-border-green {
+    border: 1px solid var(--eva-terminal-green);
+    box-shadow: 
+      0 0 10px rgba(0, 255, 65, 0.2),
+      inset 0 0 10px rgba(0, 255, 65, 0.1);
+  }
+
+  .eva-border-red {
+    border: 1px solid var(--eva-warning-red);
+    box-shadow: 
+      0 0 10px rgba(255, 51, 51, 0.2),
+      inset 0 0 10px rgba(255, 51, 51, 0.1);
+  }
+
+  .eva-input {
+    background: rgba(10, 10, 10, 0.8);
+    border: 1px solid var(--eva-orange);
+    color: var(--eva-orange);
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 
+      0 0 5px rgba(255, 102, 0, 0.2),
+      inset 0 0 5px rgba(255, 102, 0, 0.1);
+  }
+
+  .eva-input:focus {
+    border-color: var(--eva-amber);
+    box-shadow: 
+      0 0 15px rgba(255, 170, 0, 0.4),
+      inset 0 0 10px rgba(255, 170, 0, 0.1);
+  }
+
+  .eva-button {
+    background: linear-gradient(135deg, rgba(255, 102, 0, 0.2), rgba(255, 102, 0, 0.1));
+    border: 1px solid var(--eva-orange);
+    color: var(--eva-orange);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 
+      0 0 10px rgba(255, 102, 0, 0.2),
+      inset 0 0 10px rgba(255, 102, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .eva-button:hover {
+    background: linear-gradient(135deg, rgba(255, 102, 0, 0.3), rgba(255, 102, 0, 0.2));
+    box-shadow: 
+      0 0 20px rgba(255, 102, 0, 0.4),
+      inset 0 0 15px rgba(255, 102, 0, 0.2);
+  }
+
+  .eva-button:active {
+    transform: scale(0.98);
+  }
+
+  .eva-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s;
+  }
+
+  .eva-button:hover::before {
+    left: 100%;
+  }
+
+  .eva-ascii {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1;
+    white-space: pre;
+    color: var(--eva-terminal-green);
+    text-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
+  }
+
+  .eva-grid {
+    background-image: 
+      linear-gradient(rgba(255, 102, 0, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 102, 0, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .eva-crosshair {
+    position: relative;
+  }
+
+  .eva-crosshair::before,
+  .eva-crosshair::after {
+    content: '';
+    position: absolute;
+    background: var(--eva-orange);
+    opacity: 0.3;
+  }
+
+  .eva-crosshair::before {
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    transform: translateY(-50%);
+  }
+
+  .eva-crosshair::after {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+  }
+
+  .eva-radar {
+    position: relative;
+    border: 2px solid var(--eva-orange);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      transparent 30%,
+      rgba(255, 102, 0, 0.05) 30%,
+      rgba(255, 102, 0, 0.05) 60%,
+      rgba(255, 102, 0, 0.1) 60%,
+      rgba(255, 102, 0, 0.1) 90%,
+      rgba(255, 102, 0, 0.2) 90%
+    );
+  }
+
+  .eva-radar::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 50%;
+    background: var(--eva-orange);
+    transform-origin: top center;
+    transform: translate(-50%, -100%) rotate(0deg);
+    animation: radar-sweep 4s linear infinite;
+    opacity: 0.7;
+  }
+
+  @keyframes radar-sweep {
+    0% { transform: translate(-50%, -100%) rotate(0deg); }
+    100% { transform: translate(-50%, -100%) rotate(360deg); }
+  }
+
+  .eva-warning {
+    animation: eva-warning-flash 1s ease-in-out infinite alternate;
+  }
+
+  @keyframes eva-warning-flash {
+    0% { opacity: 1; }
+    100% { opacity: 0.3; }
+  }
+
+  .eva-typewriter {
+    overflow: hidden;
+    border-right: 2px solid var(--eva-orange);
+    white-space: nowrap;
+    animation: 
+      typewriter 2s steps(40, end),
+      blink-caret 0.75s step-end infinite;
+  }
+
+  @keyframes typewriter {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  @keyframes blink-caret {
+    from, to { border-color: transparent; }
+    50% { border-color: var(--eva-orange); }
+  }
+
+  .eva-status-bar {
+    background: linear-gradient(90deg, var(--eva-dark) 0%, rgba(255, 102, 0, 0.1) 50%, var(--eva-dark) 100%);
+    border: 1px solid var(--eva-orange);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--eva-orange);
+    padding: 4px 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .eva-data-stream {
+    background: rgba(10, 10, 10, 0.9);
+    border: 1px solid var(--eva-terminal-green);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--eva-terminal-green);
+    overflow: hidden;
+    height: 200px;
+    position: relative;
+  }
+
+  .eva-data-stream::before {
+    content: attr(data-stream);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    white-space: pre-wrap;
+    animation: data-scroll 10s linear infinite;
+    padding: 10px;
+    line-height: 1.2;
+  }
+
+  @keyframes data-scroll {
+    0% { transform: translateY(100%); }
+    100% { transform: translateY(-100%); }
+  }
+}
+
+/* Custom scrollbar for terminal feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--eva-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--eva-orange);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--eva-amber);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(255, 102, 0, 0.3);
+  color: var(--eva-amber);
+}
+
+/* Firefox scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--eva-orange) var(--eva-dark);
 }

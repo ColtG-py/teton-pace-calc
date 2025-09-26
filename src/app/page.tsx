@@ -1,16 +1,18 @@
 "use client"
 
 import React, { useState, useCallback } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, RefreshCw, Trash2, Target, Calculator } from "lucide-react"
+import { motion } from 'framer-motion'
+import { Calculator, Target, Activity, TrendingUp, Clock, Mountain } from 'lucide-react'
+import { DynamicAsciiMountain } from '@/components/ascii/DynamicAsciiMountain'
+import { NervTabs, StatusTabContent, AnalysisTabContent } from '@/components/ui/NervTabs'
+import { TripPlanningModal, CheckpointModal } from '@/components/ui/NervModals'
+import { StatusCard, AnalysisCard, InfoCard } from '@/components/ui/NervCards'
+import { RadarDisplay } from '@/components/terminal/TerminalInterface'
+import { ResultsDisplay } from '@/components/results/ResultsDisplay'
+import { PerformanceChart } from '@/components/analysis/PerformanceChart'
+import { NervMap } from '@/components/map/NervMap'
 
-// Types
+// FIXED Types
 interface RouteSegment {
   mile: number
   location: string
@@ -33,12 +35,14 @@ interface PredictionResult {
   terrain: string
 }
 
-interface AdjustedPaces {
+interface TerrainAdjustments {
   [key: string]: number
+}
+
+interface FatigueData extends TerrainAdjustments {
   fatigue?: number
 }
 
-// Route segments with distances and terrain types
 const routeSegments: RouteSegment[] = [
   { mile: 0, location: "Lupine Meadows Trailhead", terrain: "start", elevation: 6732 },
   { mile: 1, location: "Forest Trail", terrain: "flat", elevation: 7332 },
@@ -54,12 +58,31 @@ const routeSegments: RouteSegment[] = [
   { mile: 6.5, location: "Middle Teton Summit", terrain: "technical", elevation: 12804 }
 ]
 
-// Research-based descent speed multipliers
 const descentMultipliers = {
   flat: 1.8,
   steady: 1.6,
   boulder: 1.3,
   technical: 1.1
+}
+
+const Block = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
+  return (
+    <motion.div
+      variants={{
+        initial: { scale: 0.5, y: 50, opacity: 0 },
+        animate: { scale: 1, y: 0, opacity: 1 }
+      }}
+      transition={{
+        type: "spring",
+        mass: 3,
+        stiffness: 400,
+        damping: 50,
+      }}
+      className={`eva-terminal ${className}`}
+    >
+      {children}
+    </motion.div>
+  )
 }
 
 export default function PacingCalculator() {
@@ -72,10 +95,32 @@ export default function PacingCalculator() {
   
   const [progressInputs, setProgressInputs] = useState<ProgressInput[]>([])
   const [currentPredictions, setCurrentPredictions] = useState<PredictionResult[]>([])
-  const [adjustedPaces, setAdjustedPaces] = useState<AdjustedPaces>({})
+  const [adjustedPaces, setAdjustedPaces] = useState<FatigueData>({})
   const [progressCounter, setProgressCounter] = useState(0)
   const [showResults, setShowResults] = useState(false)
-  const [showTracking, setShowTracking] = useState(false)
+
+  // Modal States
+  const [planningModalOpen, setPlanningModalOpen] = useState(false)
+  const [checkpointModalOpen, setCheckpointModalOpen] = useState(false)
+
+  // Get current climber data
+  const getCurrentClimberData = () => {
+    const validInputs = progressInputs.filter(inp => inp.mile && inp.time)
+    if (validInputs.length === 0) return { mile: 0, elevation: 6732, phase: 'Ascent' as const }
+    
+    const furthest = validInputs.reduce((max, current) => 
+      parseFloat(current.mile) > parseFloat(max.mile) ? current : max
+    )
+    
+    const mile = parseFloat(furthest.mile)
+    const segment = routeSegments.find(s => s.mile <= mile) || routeSegments[0]
+    const phase: 'Ascent' | 'Summit' | 'Descent' = 
+      mile >= 6.5 ? 'Summit' : 
+      currentPredictions.some(p => p.mile === mile && p.phase === 'Descent') ? 'Descent' : 
+      'Ascent'
+    
+    return { mile, elevation: segment.elevation, phase }
+  }
 
   const getPaceForTerrainOriginal = useCallback((terrain: string): number => {
     switch(terrain) {
@@ -116,104 +161,6 @@ export default function PacingCalculator() {
     return hours * 60 + mins
   }, [])
 
-  const generatePredictions = useCallback((
-    startTimeParam: string, 
-    fromMile = 0, 
-    fromTime: string | null = null
-  ): PredictionResult[] => {
-    let results: PredictionResult[] = []
-    let currentTime = fromTime || startTimeParam
-    let cumulativeMinutes = fromTime ? timeToMinutes(fromTime) - timeToMinutes(startTimeParam) : 0
-    
-    let startIndex = routeSegments.findIndex(seg => seg.mile >= fromMile)
-    if (startIndex === -1) startIndex = routeSegments.length - 1
-
-    // Calculate ascent from starting point
-    for (let i = startIndex; i < routeSegments.length; i++) {
-      const segment = routeSegments[i]
-      
-      if (i < routeSegments.length - 1) {
-        const nextSegment = routeSegments[i + 1]
-        const distance = nextSegment.mile - Math.max(segment.mile, fromMile)
-        if (distance > 0) {
-          const pace = getPaceForTerrain(nextSegment.terrain, true)
-          const segmentTime = distance * pace
-          cumulativeMinutes += segmentTime
-          currentTime = addMinutesToTime(startTimeParam, cumulativeMinutes)
-        }
-      }
-      
-      if (segment.mile >= fromMile) {
-        results.push({
-          mile: segment.mile,
-          location: segment.location,
-          predictedTime: currentTime,
-          elevation: segment.elevation,
-          phase: segment.mile === 6.5 ? 'Summit' : 'Ascent',
-          terrain: segment.terrain
-        })
-      }
-    }
-    
-    // Add break time at summit
-    cumulativeMinutes += breakTime
-    currentTime = addMinutesToTime(startTimeParam, cumulativeMinutes)
-    
-    // Calculate descent
-    const descentSegments = [...routeSegments].reverse()
-    for (let i = 1; i < descentSegments.length; i++) {
-      const segment = descentSegments[i-1]
-      const nextSegment = descentSegments[i]
-      const distance = segment.mile - nextSegment.mile
-      const pace = getPaceForTerrain(segment.terrain, false)
-      const segmentTime = distance * pace
-      
-      cumulativeMinutes += segmentTime
-      currentTime = addMinutesToTime(startTimeParam, cumulativeMinutes)
-      
-      results.push({
-        mile: nextSegment.mile,
-        location: nextSegment.location + " (Descent)",
-        predictedTime: currentTime,
-        elevation: nextSegment.elevation,
-        phase: 'Descent',
-        terrain: nextSegment.terrain
-      })
-    }
-    
-    return results
-  }, [breakTime, getPaceForTerrain, addMinutesToTime, timeToMinutes])
-
-  const calculateInitialPacing = useCallback(() => {
-    setAdjustedPaces({})
-    setProgressInputs([])
-    const predictions = generatePredictions(startTime)
-    setCurrentPredictions(predictions)
-    setShowResults(true)
-    setShowTracking(true)
-  }, [startTime, generatePredictions])
-
-  const addProgressInput = useCallback(() => {
-    const newCounter = progressCounter + 1
-    setProgressCounter(newCounter)
-    const newInput: ProgressInput = {
-      id: newCounter,
-      mile: '',
-      time: ''
-    }
-    setProgressInputs(prev => [...prev, newInput])
-  }, [progressCounter])
-
-  const removeProgressInput = useCallback((id: number) => {
-    setProgressInputs(prev => prev.filter(input => input.id !== id))
-  }, [])
-
-  const updateProgressInput = useCallback((id: number, field: 'mile' | 'time', value: string) => {
-    setProgressInputs(prev => prev.map(input => 
-      input.id === id ? { ...input, [field]: value } : input
-    ))
-  }, [])
-
   const getTerrainForMile = useCallback((mile: number): string => {
     for (let i = routeSegments.length - 1; i >= 0; i--) {
       if (mile >= routeSegments[i].mile) {
@@ -246,9 +193,74 @@ export default function PacingCalculator() {
     return cumulativeMinutes
   }, [getPaceForTerrainOriginal])
 
+  const generatePredictions = useCallback((
+    startTimeParam: string, 
+    fromMile = 0, 
+    fromTime: string | null = null
+  ): PredictionResult[] => {
+    let results: PredictionResult[] = []
+    let currentTime = fromTime || startTimeParam
+    let cumulativeMinutes = fromTime ? timeToMinutes(fromTime) - timeToMinutes(startTimeParam) : 0
+    
+    let startIndex = routeSegments.findIndex(seg => seg.mile >= fromMile)
+    if (startIndex === -1) startIndex = routeSegments.length - 1
+
+    for (let i = startIndex; i < routeSegments.length; i++) {
+      const segment = routeSegments[i]
+      
+      if (i < routeSegments.length - 1) {
+        const nextSegment = routeSegments[i + 1]
+        const distance = nextSegment.mile - Math.max(segment.mile, fromMile)
+        if (distance > 0) {
+          const pace = getPaceForTerrain(nextSegment.terrain, true)
+          const segmentTime = distance * pace
+          cumulativeMinutes += segmentTime
+          currentTime = addMinutesToTime(startTimeParam, cumulativeMinutes)
+        }
+      }
+      
+      if (segment.mile >= fromMile) {
+        results.push({
+          mile: segment.mile,
+          location: segment.location,
+          predictedTime: currentTime,
+          elevation: segment.elevation,
+          phase: segment.mile === 6.5 ? 'Summit' : 'Ascent',
+          terrain: segment.terrain
+        })
+      }
+    }
+    
+    cumulativeMinutes += breakTime
+    currentTime = addMinutesToTime(startTimeParam, cumulativeMinutes)
+    
+    const descentSegments = [...routeSegments].reverse()
+    for (let i = 1; i < descentSegments.length; i++) {
+      const segment = descentSegments[i-1]
+      const nextSegment = descentSegments[i]
+      const distance = segment.mile - nextSegment.mile
+      const pace = getPaceForTerrain(segment.terrain, false)
+      const segmentTime = distance * pace
+      
+      cumulativeMinutes += segmentTime
+      currentTime = addMinutesToTime(startTimeParam, cumulativeMinutes)
+      
+      results.push({
+        mile: nextSegment.mile,
+        location: nextSegment.location + " (Descent)",
+        predictedTime: currentTime,
+        elevation: nextSegment.elevation,
+        phase: 'Descent',
+        terrain: nextSegment.terrain
+      })
+    }
+    
+    return results
+  }, [breakTime, getPaceForTerrain, addMinutesToTime, timeToMinutes])
+
   const calculatePaceAdjustments = useCallback(() => {
     const startMinutes = timeToMinutes(startTime)
-    const newAdjustedPaces: AdjustedPaces = {}
+    const newAdjustedPaces: FatigueData = {}
     
     const fatigueFactors: number[] = []
     const terrainPerformance: { [key: string]: number[] } = {}
@@ -301,7 +313,7 @@ export default function PacingCalculator() {
 
   const updateAllPredictions = useCallback(() => {
     if (progressInputs.length === 0) {
-      alert('Please add at least one progress input first.')
+      alert('ALERT: NO_TRACKING_DATA_AVAILABLE. ADD_CHECKPOINT_FIRST.')
       return
     }
 
@@ -309,7 +321,7 @@ export default function PacingCalculator() {
     
     const validInputs = progressInputs.filter(inp => inp.mile && inp.time)
     if (validInputs.length === 0) {
-      alert('Please fill in both mile and time for at least one progress input.')
+      alert('ERROR: INCOMPLETE_DATA_DETECTED. VERIFY_ALL_CHECKPOINT_FIELDS.')
       return
     }
     
@@ -327,526 +339,305 @@ export default function PacingCalculator() {
     setCurrentPredictions(predictions)
   }, [progressInputs, calculatePaceAdjustments, generatePredictions, startTime])
 
-  const clearProgress = useCallback(() => {
-    setProgressInputs([])
+  const calculateInitialPacing = useCallback(() => {
     setAdjustedPaces({})
+    setProgressInputs([])
     setProgressCounter(0)
-    calculateInitialPacing()
-  }, [calculateInitialPacing])
+    const predictions = generatePredictions(startTime)
+    setCurrentPredictions(predictions)
+    setShowResults(true)
+  }, [startTime, generatePredictions])
 
-  const getFatigueRowClass = useCallback((result: PredictionResult, validInputs: ProgressInput[]) => {
-    const isActualPoint = validInputs.some(p => Math.abs(parseFloat(p.mile) - result.mile) < 0.1)
-    if (isActualPoint) {
-      return 'bg-blue-50 dark:bg-blue-950 font-semibold'
-    } else if (Object.keys(adjustedPaces).length > 0 && adjustedPaces[result.terrain]) {
-      const fatigueLevel = adjustedPaces[result.terrain]
-      if (fatigueLevel > 1.15) {
-        return 'bg-red-50 dark:bg-red-950 border-l-4 border-red-500'
-      } else if (fatigueLevel > 1.05) {
-        return 'bg-yellow-50 dark:bg-yellow-950 border-l-4 border-yellow-500'
-      } else if (fatigueLevel < 0.95) {
-        return 'bg-green-50 dark:bg-green-950 border-l-4 border-green-500'
-      }
+  const handleCheckpointFromMountain = useCallback((mile: number) => {
+    setCheckpointModalOpen(true)
+  }, [])
+
+  const handleCheckpointSet = useCallback((mile: number, time: string) => {
+    const newCounter = progressCounter + 1
+    setProgressCounter(newCounter)
+    const newInput: ProgressInput = {
+      id: newCounter,
+      mile: mile.toString(),
+      time: time
     }
-    return ''
-  }, [adjustedPaces])
+    setProgressInputs(prev => [...prev, newInput])
+    
+    // Auto-update predictions when checkpoint is set
+    setTimeout(() => {
+      updateAllPredictions()
+    }, 100)
+  }, [progressCounter, updateAllPredictions])
 
   const isUpdated = Object.keys(adjustedPaces).length > 0
   const validInputs = progressInputs.filter(inp => inp.mile && inp.time)
+  const currentClimber = getCurrentClimberData()
+  const currentFatigueLevel = adjustedPaces.fatigue || 1.0
+
+  // Calculate summary stats
+  const endTime = currentPredictions[currentPredictions.length - 1]?.predictedTime || startTime
+  const totalMinutes = timeToMinutes(endTime) - timeToMinutes(startTime)
+  const summitETA = currentPredictions.find(r => r.mile === 6.5)?.predictedTime
+  const returnHour = parseInt(endTime.split(':')[0])
+
+  const tabs = [
+    {
+      id: 'status',
+      label: 'STATUS_MONITOR',
+      icon: <Activity className="w-4 h-4" />,
+      content: (
+        <StatusTabContent>
+          <motion.div
+            initial="initial"
+            animate="animate"
+            transition={{ staggerChildren: 0.05 }}
+            className="grid grid-cols-12 gap-4"
+          >
+            {/* Main Mountain Display - Full Width */}
+            <Block className="col-span-12 p-0">
+              <DynamicAsciiMountain
+                currentMile={currentClimber.mile}
+                fatigueLevel={currentFatigueLevel}
+                phase={currentClimber.phase}
+                onPositionClick={handleCheckpointFromMountain}
+                routeSegments={routeSegments}
+              />
+            </Block>
+
+            {/* Status Cards Grid */}
+            <Block className="col-span-12 md:col-span-8 p-4">
+              <StatusCard
+                fatigueLevel={currentFatigueLevel}
+                currentMile={currentClimber.mile}
+                elevation={currentClimber.elevation}
+                phase={currentClimber.phase}
+                nextLocation={
+                  currentPredictions.find(p => p.mile > currentClimber.mile)?.location
+                }
+              />
+            </Block>
+
+            <Block className="col-span-6 md:col-span-2 p-0">
+              <div className="h-full flex flex-col gap-4">
+                <InfoCard
+                  title="Current Mile"
+                  value={currentClimber.mile.toFixed(1)}
+                  subtitle="Position"
+                  color="green"
+                  icon={<Mountain />}
+                  className="flex-1"
+                />
+                
+                <InfoCard
+                  title="Elevation"
+                  value={`${currentClimber.elevation.toLocaleString()}ft`}
+                  subtitle="Above Sea Level"
+                  color="orange"
+                  icon={<TrendingUp />}
+                  className="flex-1"
+                />
+              </div>
+            </Block>
+
+            <Block className="col-span-6 md:col-span-2 p-0">
+              <div className="h-full flex flex-col gap-4">
+                <div className="eva-terminal p-4 text-center flex-1">
+                  <RadarDisplay 
+                    currentMile={currentClimber.mile}
+                    targetMile={6.5}
+                    size={120}
+                  />
+                </div>
+                
+                <InfoCard
+                  title="Phase"
+                  value={currentClimber.phase}
+                  subtitle="Current Status"
+                  color={currentClimber.phase === 'Summit' ? 'orange' : 'default'}
+                  icon={<Target />}
+                  className="flex-1"
+                />
+              </div>
+            </Block>
+
+            {/* Tactical Map */}
+            <Block className="col-span-12 p-0">
+              <NervMap 
+                currentMile={currentClimber.mile}
+                routeSegments={routeSegments}
+              />
+            </Block>
+          </motion.div>
+        </StatusTabContent>
+      )
+    },
+    {
+      id: 'analysis',
+      label: 'PERFORMANCE_ANALYSIS',
+      icon: <TrendingUp className="w-4 h-4" />,
+      content: (
+        <AnalysisTabContent>
+          <motion.div
+            initial="initial"
+            animate="animate"
+            transition={{ staggerChildren: 0.05 }}
+            className="grid grid-cols-12 gap-4"
+          >
+            {/* Analysis Cards */}
+            <Block className="col-span-12 md:col-span-8 p-4">
+              <AnalysisCard
+                adjustedPaces={adjustedPaces}
+                predictions={currentPredictions}
+                startTime={startTime}
+              />
+            </Block>
+
+            {/* Summary Stats */}
+            <Block className="col-span-12 md:col-span-4 p-0">
+              <div className="grid grid-cols-1 gap-4 h-full">
+                {showResults && (
+                  <>
+                    <InfoCard
+                      title="Total Time"
+                      value={`${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`}
+                      subtitle="Complete Mission"
+                      color={returnHour >= 17 ? 'red' : 'green'}
+                      icon={<Clock />}
+                    />
+                    
+                    <InfoCard
+                      title="Summit ETA"
+                      value={summitETA || 'N/A'}
+                      subtitle="Peak Arrival"
+                      color="orange"
+                      icon={<Mountain />}
+                    />
+                    
+                    <InfoCard
+                      title="Return Time"
+                      value={endTime}
+                      subtitle="Back to Trailhead"
+                      color={returnHour >= 17 ? 'red' : 'green'}
+                      icon={<Clock />}
+                    />
+                    
+                    {isUpdated && adjustedPaces.fatigue && (
+                      <InfoCard
+                        title="Fatigue Factor"
+                        value={`${Math.round(((adjustedPaces.fatigue - 1) * 100))}%`}
+                        subtitle="Performance Impact"
+                        color={adjustedPaces.fatigue > 1.1 ? 'red' : 'green'}
+                        icon={<Activity />}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            </Block>
+
+            {/* Performance Chart */}
+            {isUpdated && (
+              <Block className="col-span-12 p-0">
+                <PerformanceChart
+                  adjustedPaces={adjustedPaces}
+                  progressInputs={progressInputs}
+                  startTime={startTime}
+                  timeToMinutes={timeToMinutes}
+                  calculateExpectedTime={calculateExpectedTime}
+                />
+              </Block>
+            )}
+
+            {/* Full Results Display */}
+            {showResults && (
+              <Block className="col-span-12 p-0">
+                <ResultsDisplay
+                  predictions={currentPredictions}
+                  startTime={startTime}
+                  adjustedPaces={adjustedPaces}
+                  validInputs={validInputs}
+                  isUpdated={isUpdated}
+                  timeToMinutes={timeToMinutes}
+                  getPaceForTerrainOriginal={getPaceForTerrainOriginal}
+                />
+              </Block>
+            )}
+          </motion.div>
+        </AnalysisTabContent>
+      )
+    }
+  ]
 
   return (
     <div className="space-y-8">
-      {/* Trip Planning Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Trip Planning Inputs
-          </CardTitle>
-          <CardDescription>
-            Configure your expected pacing and start time for the Middle Teton Southwest Couloir route
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="startTime">Start Time</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="breakTime">Break Time at Summit (minutes)</Label>
-              <Input
-                id="breakTime"
-                type="number"
-                min="0"
-                value={breakTime}
-                onChange={(e) => setBreakTime(parseInt(e.target.value))}
-              />
-            </div>
+      {/* Action Buttons */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex gap-4 justify-center mb-8"
+      >
+        <button
+          onClick={() => setPlanningModalOpen(true)}
+          className="eva-button px-6 py-3 flex items-center gap-2"
+        >
+          <Calculator className="w-4 h-4" />
+          CONFIGURE_MISSION_PARAMETERS
+        </button>
+        
+        <button
+          onClick={() => setCheckpointModalOpen(true)}
+          className="eva-button px-6 py-3 flex items-center gap-2"
+          disabled={!showResults}
+        >
+          <Target className="w-4 h-4" />
+          SET_CHECKPOINT
+        </button>
+      </motion.div>
+
+      {/* Main Tab Interface */}
+      {showResults ? (
+        <NervTabs tabs={tabs} defaultTab="status" />
+      ) : (
+        <Block className="col-span-12 text-center py-20">
+          <div className="eva-text-green text-xl mb-4">
+            NERV MISSION CONTROL SYSTEM
           </div>
-
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">🚶 Ascent Pacing (minutes per mile)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="flatPace">Flat/Slight Incline (Trail miles 0-3)</Label>
-                <Input
-                  id="flatPace"
-                  type="number"
-                  min="10"
-                  max="60"
-                  value={flatPace}
-                  onChange={(e) => setFlatPace(parseInt(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="steadyPace">Steady Incline (miles 3-4.7)</Label>
-                <Input
-                  id="steadyPace"
-                  type="number"
-                  min="15"
-                  max="90"
-                  value={steadyPace}
-                  onChange={(e) => setSteadyPace(parseInt(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="boulderPace">Boulder Scramble (miles 4.7-5.7)</Label>
-                <Input
-                  id="boulderPace"
-                  type="number"
-                  min="30"
-                  max="120"
-                  value={boulderPace}
-                  onChange={(e) => setBoulderPace(parseInt(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="technicalPace">Grade 3-4 Ascent (miles 5.7-6.5)</Label>
-                <Input
-                  id="technicalPace"
-                  type="number"
-                  min="45"
-                  max="150"
-                  value={technicalPace}
-                  onChange={(e) => setTechnicalPace(parseInt(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground italic">
-              🔄 Descent paces are auto-calculated based on mountaineering research:
-              Flat terrain 1.8x faster, Steady 1.6x faster, Boulder 1.3x faster, Technical 1.1x faster
-            </div>
-
-            <Button onClick={calculateInitialPacing} className="w-full">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Calculate Initial Trip Pacing
-            </Button>
+          <div className="eva-text mb-8">
+            CONFIGURE_MISSION_PARAMETERS_TO_BEGIN_TACTICAL_ANALYSIS
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Real-Time Progress Tracking Section */}
-      {showTracking && (
-        <Card className="border-yellow-200 dark:border-yellow-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Real-Time Progress Tracking
-            </CardTitle>
-            <CardDescription>
-              Input your current position and time to update all future predictions based on your actual performance.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-4">
-              {progressInputs.map((input) => (
-                <Card key={input.id} className="p-4 bg-muted/50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Current Mile Position (0-6.5)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="6.5"
-                        step="0.1"
-                        value={input.mile}
-                        onChange={(e) => updateProgressInput(input.id, 'mile', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Current Time</Label>
-                      <Input
-                        type="time"
-                        value={input.time}
-                        onChange={(e) => updateProgressInput(input.id, 'time', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => removeProgressInput(input.id)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Remove
-                  </Button>
-                </Card>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={addProgressInput}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Current Position
-              </Button>
-              <Button onClick={updateAllPredictions}>
-                <Target className="mr-2 h-4 w-4" />
-                Update All Predictions
-              </Button>
-              <Button variant="outline" onClick={clearProgress}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Clear All Progress
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <button
+            onClick={() => setPlanningModalOpen(true)}
+            className="eva-button px-8 py-4 text-lg"
+          >
+            INITIATE_MISSION_PLANNING
+          </button>
+        </Block>
       )}
 
-      {/* Results Section */}
-      {showResults && (
-        <Card>
-          <CardHeader>
-            <CardTitle>📊 Your Pacing Plan</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Summary */}
-            {currentPredictions.length > 0 && (
-              <div>
-                {(() => {
-                  const endTime = currentPredictions[currentPredictions.length - 1]?.predictedTime || startTime
-                  const totalMinutes = timeToMinutes(endTime) - timeToMinutes(startTime)
-                  const totalHours = Math.floor(totalMinutes / 60)
-                  const totalMins = totalMinutes % 60
-                  const summitETA = currentPredictions.find(r => r.mile === 6.5)?.predictedTime
+      {/* Modals */}
+      <TripPlanningModal
+        isOpen={planningModalOpen}
+        setIsOpen={setPlanningModalOpen}
+        startTime={startTime}
+        setStartTime={setStartTime}
+        breakTime={breakTime}
+        setBreakTime={setBreakTime}
+        flatPace={flatPace}
+        setFlatPace={setFlatPace}
+        steadyPace={steadyPace}
+        setSteadyPace={setSteadyPace}
+        boulderPace={boulderPace}
+        setBoulderPace={setBoulderPace}
+        technicalPace={technicalPace}
+        setTechnicalPace={setTechnicalPace}
+        onCalculate={calculateInitialPacing}
+      />
 
-                  return (
-                    <div className="bg-blue-600 text-white p-4 rounded-lg text-center">
-                      <div className="text-lg font-semibold">
-                        🕐 Trip Summary {isUpdated && validInputs.length > 0 ? `(Updated from Mile ${Math.max(...validInputs.map(p => parseFloat(p.mile)))})` : ''}: {startTime} start → {endTime} return
-                      </div>
-                      <div className="mt-2">
-                        ⏱️ Total Time: {totalHours}h {totalMins}m | 🎯 Summit ETA: {summitETA}
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* Late return warning */}
-                {(() => {
-                  const endTime = currentPredictions[currentPredictions.length - 1]?.predictedTime || startTime
-                  const returnHour = parseInt(endTime.split(':')[0])
-                  return returnHour >= 17 ? (
-                    <div className="bg-red-600 text-white p-3 rounded-lg font-semibold">
-                      ⚠️ WARNING: Late return time increases risk. Consider faster pacing or earlier start.
-                    </div>
-                  ) : null
-                })()}
-
-                {/* Performance analysis */}
-                {isUpdated && Object.keys(adjustedPaces).length > 0 && (
-                  <div className="bg-green-600 text-white p-3 rounded-lg">
-                    {(() => {
-                      const fatiguePercent = Math.round(((adjustedPaces.fatigue || 1) - 1) * 100)
-                      const fatigueDesc = fatiguePercent > 15 ? " (High fatigue - affects all terrain)" : 
-                                        fatiguePercent > 5 ? " (Moderate fatigue)" : 
-                                        fatiguePercent < -5 ? " (Strong performance - ahead of schedule)" : " (On target)"
-                      
-                      return (
-                        <div>
-                          <div className="font-semibold">📊 Performance Analysis: Overall Fatigue: {fatiguePercent > 0 ? '+' : ''}{fatiguePercent}%{fatigueDesc}</div>
-                          <div className="mt-1">
-                            <span className="font-semibold">Terrain Adjustments:</span> {' '}
-                            {['flat', 'steady', 'boulder', 'technical'].map(terrain => {
-                              if (adjustedPaces[terrain]) {
-                                const percentage = Math.round((adjustedPaces[terrain] - 1) * 100)
-                                return `${terrain}: ${percentage > 0 ? '+' : ''}${percentage}% `
-                              }
-                              return null
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })()}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Main Results Table */}
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mile</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>{isUpdated ? 'Updated ETA' : 'Predicted ETA'}</TableHead>
-                    <TableHead>Elevation</TableHead>
-                    <TableHead>Phase</TableHead>
-                    <TableHead>Terrain</TableHead>
-                    {isUpdated && <TableHead>Fatigue Impact</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentPredictions.map((result, index) => (
-                    <TableRow key={index} className={getFatigueRowClass(result, validInputs)}>
-                      <TableCell>{result.mile}</TableCell>
-                      <TableCell>{result.location}</TableCell>
-                      <TableCell className="font-semibold">{result.predictedTime}</TableCell>
-                      <TableCell>{result.elevation.toLocaleString()}ft</TableCell>
-                      <TableCell>
-                        <Badge variant={result.phase === 'Summit' ? 'default' : result.phase === 'Ascent' ? 'secondary' : 'outline'}>
-                          {result.phase}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="capitalize">{result.terrain}</TableCell>
-                      {isUpdated && (
-                        <TableCell>
-                          {adjustedPaces[result.terrain] && (
-                            (() => {
-                              const impact = Math.round(((adjustedPaces[result.terrain] || 1) - 1) * 100)
-                              return (
-                                <span className={`font-bold ${impact > 0 ? 'text-red-600' : impact < 0 ? 'text-green-600' : ''}`}>
-                                  {impact > 0 ? '+' : ''}{impact}%
-                                </span>
-                              )
-                            })()
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Adjusted Pacing Rates */}
-            {isUpdated && Object.keys(adjustedPaces).length > 0 && (
-              <div className="space-y-4">
-                <Separator />
-                <h3 className="text-xl font-semibold">📈 Adjusted Pacing Rates</h3>
-                <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg text-sm">
-                  <span className="font-semibold">🧠 Fatigue Modeling:</span> Paces are adjusted using both terrain-specific performance (60%) and overall fatigue factor (40%). 
-                  If you&apos;re consistently behind schedule, fatigue is applied to ALL terrain types, recognizing that tiredness affects performance across all conditions.
-                </div>
-
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Terrain Type</TableHead>
-                        <TableHead>Original Pace (min/mile)</TableHead>
-                        <TableHead>Adjusted Pace (min/mile)</TableHead>
-                        <TableHead>Change</TableHead>
-                        <TableHead>Ascent/Descent</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {['flat', 'steady', 'boulder', 'technical'].map((terrain) => {
-                        const originalAscent = getPaceForTerrainOriginal(terrain)
-                        const adjustedAscent = Math.round(originalAscent * (adjustedPaces[terrain] || 1))
-                        const originalDescent = Math.round(originalAscent / descentMultipliers[terrain as keyof typeof descentMultipliers])
-                        const adjustedDescent = Math.round(adjustedAscent / descentMultipliers[terrain as keyof typeof descentMultipliers])
-                        const change = Math.round(((adjustedPaces[terrain] || 1) - 1) * 100)
-
-                        return (
-                          <TableRow key={terrain}>
-                            <TableCell className="capitalize font-semibold">{terrain}</TableCell>
-                            <TableCell>{originalAscent} / {originalDescent}</TableCell>
-                            <TableCell className="font-semibold">{adjustedAscent} / {adjustedDescent}</TableCell>
-                            <TableCell>
-                              <span className={`font-bold ${change > 0 ? 'text-red-600' : change < 0 ? 'text-green-600' : ''}`}>
-                                {change > 0 ? '+' : ''}{change}%
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">Up / Down</TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="text-sm text-muted-foreground italic">
-                  💡 Adjusted paces include both terrain-specific performance and cumulative fatigue effects.
-                  Descent speeds calculated using research-based ratios.
-                </div>
-
-                {/* Fatigue Legend */}
-                <div className="text-sm">
-                  <span className="font-semibold">Fatigue Impact Legend:</span>
-                  <div className="flex flex-wrap gap-4 mt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-4 bg-green-50 dark:bg-green-950 border-l-4 border-green-500"></div>
-                      <span>Ahead of pace</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-4 bg-yellow-50 dark:bg-yellow-950 border-l-4 border-yellow-500"></div>
-                      <span>Moderate fatigue</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-4 bg-red-50 dark:bg-red-950 border-l-4 border-red-500"></div>
-                      <span>High fatigue impact</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Mathematical Models Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>🧮 Mathematical Models & Formulas</CardTitle>
-          <CardDescription>Understanding the calculations behind your pacing predictions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">1. Basic Time Calculation</h3>
-              <div className="bg-muted p-4 border-l-4 border-blue-500 space-y-2">
-                <div><strong>Segment Time = Distance × Pace</strong></div>
-                <code className="text-sm">time_minutes = (mile_end - mile_start) × pace_per_mile</code>
-                <br />
-                <div><strong>Cumulative Time = Start Time + Σ(Segment Times)</strong></div>
-                <code className="text-sm">ETA = start_time + Σ(distance_i × pace_i) + break_time</code>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">2. Research-Based Descent Speed Multipliers</h3>
-              <div className="bg-muted p-4 border-l-4 border-green-500 space-y-2">
-                <div>Based on mountaineering research (Naismith&apos;s Rule, Alpine Club standards):</div>
-                <div><strong>Descent Pace = Ascent Pace ÷ Terrain Multiplier</strong></div>
-                <div className="font-mono text-sm space-y-1">
-                  <div>• Flat terrain: descent_pace = ascent_pace ÷ 1.8</div>
-                  <div>• Steady inclines: descent_pace = ascent_pace ÷ 1.6</div>
-                  <div>• Boulder scrambles: descent_pace = ascent_pace ÷ 1.3</div>
-                  <div>• Technical (Class 3-4): descent_pace = ascent_pace ÷ 1.1</div>
-                </div>
-                <div className="text-sm italic">Rationale: Descent advantage decreases with terrain difficulty due to safety considerations and loose rock hazards.</div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">3. Performance Ratio & Fatigue Calculation</h3>
-              <div className="bg-muted p-4 border-l-4 border-yellow-500 space-y-2">
-                <div><strong>Performance Ratio (for each progress input):</strong></div>
-                <code className="text-sm">performance_ratio = actual_elapsed_time ÷ expected_elapsed_time</code>
-                <br />
-                <div><strong>Overall Fatigue Factor:</strong></div>
-                <code className="text-sm">fatigue_factor = Σ(performance_ratios) ÷ number_of_inputs</code>
-                <br />
-                <div><strong>Terrain-Specific Performance:</strong></div>
-                <code className="text-sm">terrain_performance[terrain] = average(performance_ratios_for_terrain)</code>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">4. Blended Pace Adjustment Formula</h3>
-              <div className="bg-muted p-4 border-l-4 border-red-500 space-y-2">
-                <div><strong>For terrain with specific data:</strong></div>
-                <code className="text-sm">adjusted_pace = original_pace × [(terrain_performance × 0.6) + (fatigue_factor × 0.4)]</code>
-                <br />
-                <div><strong>For terrain without specific data:</strong></div>
-                <code className="text-sm">adjusted_pace = original_pace × fatigue_factor</code>
-                <br />
-                <div><strong>Final Segment Time:</strong></div>
-                <code className="text-sm">updated_time = current_position_time + (remaining_distance × adjusted_pace)</code>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">5. Expected Time Calculation (for comparison)</h3>
-              <div className="bg-muted p-4 border-l-4 border-purple-500">
-                <pre className="text-sm font-mono whitespace-pre-wrap">
-{`expected_time_to_mile = 0
-for each segment from start to target_mile:
-    segment_distance = min(segment_end, target_mile) - segment_start
-    if segment_distance > 0:
-        expected_time_to_mile += segment_distance × original_pace[terrain]`}
-                </pre>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">6. Terrain Classification by Mile</h3>
-              <div className="bg-muted p-4 border-l-4 border-cyan-500 space-y-2">
-                <div><strong>Route Segments & Terrain Assignment:</strong></div>
-                <div className="font-mono text-sm space-y-1">
-                  <div>• Miles 0-3.0: &quot;flat&quot; terrain (forest trail, switchbacks)</div>
-                  <div>• Miles 3.0-4.7: &quot;steady&quot; terrain (Garnet Canyon to Meadows)</div>
-                  <div>• Miles 4.7-5.7: &quot;boulder&quot; terrain (boulder fields to saddle)</div>
-                  <div>• Miles 5.7-6.5: &quot;technical&quot; terrain (Southwest Couloir, Class 3-4)</div>
-                </div>
-                <div>Function: <code className="text-sm">getTerrainForMile(mile) → terrain_type</code></div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">7. Update Logic Flow</h3>
-              <div className="bg-muted p-4 border-l-4 border-gray-500">
-                <div><strong>Step-by-step process:</strong></div>
-                <ol className="font-mono text-sm space-y-1 list-decimal list-inside mt-2">
-                  <li>Calculate performance_ratio for each progress input</li>
-                  <li>Compute overall fatigue_factor (average of all ratios)</li>
-                  <li>Calculate terrain-specific adjustments where data exists</li>
-                  <li>Blend terrain + fatigue using 60/40 weighting</li>
-                  <li>Find furthest progress point</li>
-                  <li>Generate new predictions from that point forward using adjusted paces</li>
-                  <li>Apply break time at summit</li>
-                  <li>Calculate descent using research-based multipliers</li>
-                </ol>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">8. Example Calculation</h3>
-              <div className="bg-green-50 dark:bg-green-950 p-4 border-l-4 border-green-500 space-y-2">
-                <div><strong>Scenario:</strong> Predicted Boulder Midpoint (Mile 5.2) at 10:30, Actual arrival at 11:10</div>
-                <div className="font-mono text-sm space-y-1">
-                  <div>• Expected time to Mile 5.2: 390 minutes (6h 30m from 4:00 start)</div>
-                  <div>• Actual time to Mile 5.2: 430 minutes (7h 10m from 4:00 start)</div>
-                  <div>• Performance ratio: 430 ÷ 390 = 1.103 (10.3% slower)</div>
-                  <div>• Boulder terrain adjustment: 1.103</div>
-                  <div>• Overall fatigue factor: 1.103</div>
-                  <div>• Adjusted boulder pace: 60 × 1.103 = 66 min/mile</div>
-                  <div>• Time to saddle: 11:10 + (0.5 miles × 66 min/mile) = 11:43</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-lg text-sm">
-              <div><strong>💡 Key Insights:</strong></div>
-              <ul className="list-disc list-inside space-y-1 mt-2">
-                <li>Fatigue affects ALL future terrain types, not just the one you&apos;re currently on</li>
-                <li>Descent speeds are calculated dynamically based on adjusted ascent paces</li>
-                <li>The 60/40 blend ensures terrain expertise is weighted more than general fatigue</li>
-                <li>Break times and elevation changes are preserved in all calculations</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <CheckpointModal
+        isOpen={checkpointModalOpen}
+        setIsOpen={setCheckpointModalOpen}
+        routeSegments={routeSegments}
+        onCheckpointSet={handleCheckpointSet}
+      />
     </div>
   )
 }
